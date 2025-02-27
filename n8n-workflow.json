@@ -1,0 +1,618 @@
+{
+  "name": "Sales AI Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -100,
+        80
+      ],
+      "id": "305c3bca-8a5a-41b3-bcb7-e3db6db0e0f5",
+      "name": "New Question",
+      "webhookId": "c0dddb4e-5b4f-4916-9ff6-5ce562ca20f2",
+      "credentials": {
+        "telegramApi": {
+          "id": "KpPialTOv5opb2WQ",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        -280
+      ],
+      "id": "8500981e-5abd-4fe5-a99a-202168eb7078",
+      "name": "Manual Run"
+    },
+    {
+      "parameters": {
+        "content": "## On manual run\nThis section:\n* Get updated table schema\n* Get a sample data\n* Stores relevant information to be used by LLM in disk",
+        "height": 400,
+        "width": 1380,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -140,
+        -460
+      ],
+      "id": "0c631263-b548-4503-9787-f853353d4ea8",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n    'CREATE TABLE ' || table_schema || '.' || table_name || ' (' ||\n    string_agg(\n        column_name || ' ' || data_type || \n        CASE \n            WHEN character_maximum_length IS NOT NULL THEN '(' || character_maximum_length || ')'\n            WHEN numeric_precision IS NOT NULL THEN '(' || numeric_precision || \n                CASE WHEN numeric_scale IS NOT NULL THEN ',' || numeric_scale ELSE '' END || ')'\n            ELSE ''\n        END ||\n        CASE WHEN is_nullable = 'NO' THEN ' NOT NULL' ELSE '' END,\n        ', '\n    ) || ');' AS create_table_command\nFROM information_schema.columns\nWHERE table_schema = 'public' AND table_name = 'sales'\nGROUP BY table_schema, table_name;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        140,
+        -280
+      ],
+      "id": "3973c4a1-732f-492a-a026-eac6fe7ed394",
+      "name": "Get Table Schema",
+      "credentials": {
+        "postgres": {
+          "id": "y9oJmY2xOALWVRwX",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "select",
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "sales",
+          "mode": "list",
+          "cachedResultName": "sales"
+        },
+        "limit": 10,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        360,
+        -280
+      ],
+      "id": "5ec07c4d-e48a-4884-9237-ef2403978481",
+      "name": "Get Sample Data",
+      "credentials": {
+        "postgres": {
+          "id": "y9oJmY2xOALWVRwX",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "toJson",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        800,
+        -280
+      ],
+      "id": "4e19c4d8-3733-4c97-ac80-bc412db9f1e3",
+      "name": "Convert to JSON"
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "file.json",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        1000,
+        -280
+      ],
+      "id": "f2e7051f-a764-46f9-ab2d-a30dc8016d74",
+      "name": "Write JSON from Disk"
+    },
+    {
+      "parameters": {
+        "fileSelector": "file.json",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        140,
+        80
+      ],
+      "id": "82f036cf-4680-4929-a77f-fd784f529fe4",
+      "name": "Read Database Info"
+    },
+    {
+      "parameters": {
+        "operation": "fromJson",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        360,
+        80
+      ],
+      "id": "04b12b2e-d296-4258-9f94-6935de8d8b02",
+      "name": "Desserialize Database Info"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={\n  \"schema\": \"{{ $('Get Table Schema').item.json.create_table_command }}\",\n  \"samples\": [\n    {\n      \"store\": \"{{ $json.store }}\",\n      \"value\": {{ $json.value }},\n      \"date\": \"{{ $json.date }}\",\n      \"city\": \"{{ $json.city }}\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        580,
+        -280
+      ],
+      "id": "9afd2005-db86-4ea8-bdab-ba8edde664d0",
+      "name": "Parse Database Info"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "66db4ab5-51cb-4106-84af-fed8d9a0d960",
+              "name": "schema",
+              "value": "={{ $json.data[0].schema }}",
+              "type": "string"
+            },
+            {
+              "id": "a7da6558-ec01-4fab-a718-947d1095b2c1",
+              "name": "sample",
+              "value": "={{ $json.data[0].samples[0] }}",
+              "type": "object"
+            },
+            {
+              "id": "1b12cc56-33ab-4f72-b6e8-b98aae7adfc1",
+              "name": "chatInput",
+              "value": "={{ $('New Question').item.json.message.text }}",
+              "type": "string"
+            },
+            {
+              "id": "3da1112e-c151-43aa-bc73-951e14ce8d7d",
+              "name": "sessionId",
+              "value": "={{ $('New Question').item.json.message.date }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        600,
+        80
+      ],
+      "id": "df325039-8d28-41ae-8291-e15b46b865aa",
+      "name": "Add chatInput to Database Info"
+    },
+    {
+      "parameters": {
+        "projectId": {
+          "__rl": true,
+          "value": "helical-patrol-449415-r8",
+          "mode": "id"
+        },
+        "modelName": "gemini-2.0-flash-001",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleVertex",
+      "typeVersion": 1,
+      "position": [
+        760,
+        280
+      ],
+      "id": "c2539618-afe0-4cc3-9ad6-ce5303c79f1e",
+      "name": "Google Vertex Chat Model",
+      "credentials": {
+        "googleApi": {
+          "id": "Xm1VG6BNiZO8PavD",
+          "name": "Google Service Account account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.3,
+      "position": [
+        900,
+        280
+      ],
+      "id": "c7c4151e-b11c-44c6-b785-a5f13304ad82",
+      "name": "Postgres Chat Memory",
+      "credentials": {
+        "postgres": {
+          "id": "y9oJmY2xOALWVRwX",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "{{ \"SELECT row_to_json(t) FROM (\" + $json.output.replaceAll(\"sql\", \"\").replaceAll(\";\", \"\").replaceAll(\"`\", \"\").trim() + \") t;\" }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1180,
+        80
+      ],
+      "id": "2740cac3-f899-4039-89a5-946fb0ea533c",
+      "name": "Run Query",
+      "credentials": {
+        "postgres": {
+          "id": "y9oJmY2xOALWVRwX",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f335c949-fbde-4d22-b3b3-b93740554087",
+              "name": "question",
+              "value": "={{ $('Add chatInput to Database Info').item.json.chatInput }}",
+              "type": "string"
+            },
+            {
+              "id": "d0f2f872-789b-4890-ba74-c9d380791ca4",
+              "name": "result",
+              "value": "={{ $json.row_to_json }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1400,
+        80
+      ],
+      "id": "ab775ef5-5f02-42c9-a251-0cbf887df52e",
+      "name": "Add Question and Query Result"
+    },
+    {
+      "parameters": {
+        "projectId": {
+          "__rl": true,
+          "value": "helical-patrol-449415-r8",
+          "mode": "id"
+        },
+        "modelName": "gemini-2.0-flash-001",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleVertex",
+      "typeVersion": 1,
+      "position": [
+        1660,
+        300
+      ],
+      "id": "6a39e2df-9dee-4d25-b0a2-5aa4891d0374",
+      "name": "Google Vertex Chat Model1",
+      "credentials": {
+        "googleApi": {
+          "id": "Xm1VG6BNiZO8PavD",
+          "name": "Google Service Account account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('New Question').item.json.update_id }}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.3,
+      "position": [
+        1820,
+        300
+      ],
+      "id": "377ab9e9-ab1c-4890-92c3-946fe6766e6d",
+      "name": "Postgres Chat Memory1",
+      "credentials": {
+        "postgres": {
+          "id": "y9oJmY2xOALWVRwX",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Given a question made by a human and a response in JSON, please, give a short and direct, but polite, answer to that question.\n\nQuestion:  {{ $json.question }}\nResult: {{ $json.result }}",
+        "options": {
+          "systemMessage": "You are a helpful assistant, with the task to answer question made by managers about Sales data."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        1620,
+        80
+      ],
+      "id": "7f32aba4-1dfe-4676-ad02-20cd54325261",
+      "name": "Question Formatter Agent"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Here is the database schema: {{ $json.schema }}\nHere is the user request: {{ $json.chatInput }}",
+        "options": {
+          "systemMessage": "Assistant is a large language model trained by OpenAI.\n\nAssistant is designed to be able to assist with a wide range of tasks, from answering simple questions to providing in-depth explanations and discussions on a wide range of topics. As a language model, Assistant is able to generate human-like text based on the input it receives, allowing it to engage in natural-sounding conversations and provide responses that are coherent and relevant to the topic at hand.\n\nAssistant is constantly learning and improving, and its capabilities are constantly evolving. It is able to process and understand large amounts of text, and can use this knowledge to provide accurate and informative responses to a wide range of questions. Additionally, Assistant is able to generate its own text based on the input it receives, allowing it to engage in discussions and provide explanations and descriptions on a wide range of topics.\n\nOverall, Assistant is a powerful system that can help with a wide range of tasks and provide valuable insights and information on a wide range of topics. Whether you need help with a specific question or just want to have a conversation about a particular topic, Assistant is here to assist.\n\nHelp user to work with the Postgres database.\n\nPlease return only the SQL command.",
+          "returnIntermediateSteps": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        820,
+        80
+      ],
+      "id": "33a84f87-c8fc-46f3-aba2-c309e468cf97",
+      "name": "SQL Builder Agent"
+    },
+    {
+      "parameters": {
+        "chatId": "=8162943027",
+        "text": "={{ $json.output }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1980,
+        80
+      ],
+      "id": "764654fd-d284-40c8-8c72-c9ecab321c15",
+      "name": "Send Message",
+      "webhookId": "a4f8d2cd-a00e-4195-913f-5cd7b27ba0b9",
+      "credentials": {
+        "telegramApi": {
+          "id": "KpPialTOv5opb2WQ",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "New Question": {
+      "main": [
+        [
+          {
+            "node": "Read Database Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Run": {
+      "main": [
+        [
+          {
+            "node": "Get Table Schema",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Table Schema": {
+      "main": [
+        [
+          {
+            "node": "Get Sample Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Sample Data": {
+      "main": [
+        [
+          {
+            "node": "Parse Database Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert to JSON": {
+      "main": [
+        [
+          {
+            "node": "Write JSON from Disk",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Database Info": {
+      "main": [
+        [
+          {
+            "node": "Desserialize Database Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Database Info": {
+      "main": [
+        [
+          {
+            "node": "Convert to JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Desserialize Database Info": {
+      "main": [
+        [
+          {
+            "node": "Add chatInput to Database Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add chatInput to Database Info": {
+      "main": [
+        [
+          {
+            "node": "SQL Builder Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Vertex Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "SQL Builder Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres Chat Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "SQL Builder Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Query": {
+      "main": [
+        [
+          {
+            "node": "Add Question and Query Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add Question and Query Result": {
+      "main": [
+        [
+          {
+            "node": "Question Formatter Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Vertex Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Question Formatter Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres Chat Memory1": {
+      "ai_memory": [
+        [
+          {
+            "node": "Question Formatter Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SQL Builder Agent": {
+      "main": [
+        [
+          {
+            "node": "Run Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Question Formatter Agent": {
+      "main": [
+        [
+          {
+            "node": "Send Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "e6558b55-e3a0-4f79-ac80-e1f1ae6cb22a",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "b56e91f6bebf82c1183a226b7dc0ca54c147fb235f7ad14e1706c2bf03fcbd31"
+  },
+  "id": "A4HpDIprhvslH3Kd",
+  "tags": []
+}
